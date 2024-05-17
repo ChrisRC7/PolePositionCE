@@ -1,52 +1,71 @@
-#include <stdio.h>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
-// Dimensiones de la ventana
-const int SCREEN_WIDTH = 640;
-const int SCREEN_HEIGHT = 480;
+#include "./draw.h"
+#include "./game.h"
+#include "./math.h"
 
-int main(int argc, char* args[]) {
-    // Inicializar SDL
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        printf("SDL no se pudo inicializar. SDL_Error: %s\n", SDL_GetError());
-        return 1;
+SDL_Window *window = NULL;
+SDL_Surface *screen = NULL;
+SDL_Renderer *renderer;
+SDL_Event e;
+bool quit = false;
+bool gameOver = false;
+
+Uint64 now = 0;
+Uint64 last = 0;
+double deltaTime = 0;
+
+int cubesLength = 0;
+Cube cubes[1000];
+
+void init() {
+  SDL_Init(SDL_INIT_EVERYTHING);
+  window = SDL_CreateWindow("Blockamok", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, SDL_WINDOW_SHOWN);
+  renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  screen = SDL_GetWindowSurface(window);
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+  srand(time(NULL));
+  TTF_Init();
+  gameInit(cubes, &cubesLength);
+}
+
+void gameLoop() {
+  SDL_PollEvent(&e);
+  if (!gameOver) {
+    gameOver = gameFrame(deltaTime, cubes, &cubesLength);
+  }
+  if (e.type == SDL_QUIT) {
+    quit = true;
+  }
+}
+
+int main(int arg, char *argv[]) {
+  init();
+
+  while (!quit) {
+    last = now;
+    now = SDL_GetTicks();
+
+    gameLoop();
+
+    draw(renderer);
+
+    drawCubes(renderer, cubes, cubesLength);
+
+    drawSpeedText(renderer);
+    if (gameOver) {
+      drawGameOverText(renderer);
     }
 
-    // Crear ventana
-    SDL_Window* window = SDL_CreateWindow("Mi Juego", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
-    if (window == NULL) {
-        printf("La ventana no se pudo crear. SDL_Error: %s\n", SDL_GetError());
-        return 1;
-    }
-
-    // Obtener el renderizador
-    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (renderer == NULL) {
-        printf("No se pudo crear el renderizador. SDL_Error: %s\n", SDL_GetError());
-        return 1;
-    }
-
-    // Color de fondo
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-
-    // Limpiar la pantalla
-    SDL_RenderClear(renderer);
-
-    // Dibujar un rectángulo rojo en el centro de la pantalla
-    SDL_Rect rect = {SCREEN_WIDTH/2 - 50, SCREEN_HEIGHT/2 - 50, 100, 100};
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-    SDL_RenderFillRect(renderer, &rect);
-
-    // Actualizar la pantalla
     SDL_RenderPresent(renderer);
 
-    // Esperar 3 segundos antes de cerrar la ventana
-    SDL_Delay(3000);
+    deltaTime = (double)((now - last)) / 12000;
+  }
 
-    // Liberar recursos y cerrar SDL
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-
-    return 0;
+  return 0;
 }
