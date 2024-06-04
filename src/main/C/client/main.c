@@ -1,71 +1,42 @@
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
 #include "./draw.h"
-#include "./game.h"
-#include "./math.h"
 
 SDL_Window *window = NULL;
-SDL_Surface *screen = NULL;
 SDL_Renderer *renderer;
 SDL_Event e;
 bool quit = false;
-bool gameOver = false;
-
-Uint64 now = 0;
-Uint64 last = 0;
-double deltaTime = 0;
-
-int cubesLength = 0;
-Cube cubes[1000];
 
 void init() {
-  SDL_Init(SDL_INIT_EVERYTHING);
-  window = SDL_CreateWindow("Blockamok", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, SDL_WINDOW_SHOWN);
-  renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-  screen = SDL_GetWindowSurface(window);
-  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-  srand(time(NULL));
-  TTF_Init();
-  gameInit(cubes, &cubesLength);
+    SDL_Init(SDL_INIT_EVERYTHING);
+    window = SDL_CreateWindow("Pista de Carreras", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, SDL_WINDOW_SHOWN);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 }
 
 void gameLoop() {
-  SDL_PollEvent(&e);
-  if (!gameOver) {
-    gameOver = gameFrame(deltaTime, cubes, &cubesLength);
-  }
-  if (e.type == SDL_QUIT) {
-    quit = true;
-  }
+    while (SDL_PollEvent(&e)) {
+        if (e.type == SDL_QUIT) {
+            quit = true;
+        }
+    }
 }
 
 int main(int arg, char *argv[]) {
-  init();
+    init();
 
-  while (!quit) {
-    last = now;
-    now = SDL_GetTicks();
-
-    gameLoop();
-
-    draw(renderer);
-
-    drawCubes(renderer, cubes, cubesLength);
-
-    drawSpeedText(renderer);
-    if (gameOver) {
-      drawGameOverText(renderer);
+    while (!quit) {
+        gameLoop();
+        draw(renderer);
+        SDL_Delay(16); // Aproximadamente 60 fps
     }
 
-    SDL_RenderPresent(renderer);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
 
-    deltaTime = (double)((now - last)) / 12000;
-  }
-
-  return 0;
+    return 0;
 }

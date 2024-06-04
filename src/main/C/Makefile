@@ -1,21 +1,17 @@
-SRCS := $(wildcard client/*.c)
-OBJS := $(SRCS:.c=.o)
+# Directorios de inclusión y biblioteca
+INCLUDE_DIR := include
+LIB_DIR := lib
 
+# Fuentes
+SRCS := client/main2.c client/draw.c client/game.c client/math.c
+
+# Objetivo principal
 all: main
 
-main: $(OBJS)
-		gcc -o $@ $^ -I include -L lib -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf
+# Comando para construir el ejecutable principal
+main: $(SRCS)
+	gcc -I $(INCLUDE_DIR) -I $(INCLUDE_DIR)/SDL2 -L $(LIB_DIR) -o main4 $(SRCS) -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf
 
+# Comando para limpiar archivos generados
 clean:
-		rm -f $(OBJS) main
-
-# Generar dependencias
-depend: $(SRCS)
-	gcc -M $(SRCS) -I include/SDL2 > depend
-
-# Incluir dependencias en el Makefile
-include depend
-
-# Compilar archivos de origen
-%.o: %.c
-		gcc -c -o $@ $< -I include
+	rm -f client/*.o main
