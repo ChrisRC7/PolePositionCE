@@ -3,14 +3,14 @@ INCLUDE_DIR := include
 LIB_DIR := lib
 
 # Fuentes
-SRCS := client/main2.c client/draw.c client/game.c client/math.c
+SRCS := client/main.c
 
 # Objetivo principal
 all: main
 
 # Comando para construir el ejecutable principal
 main: $(SRCS)
-	gcc -I $(INCLUDE_DIR) -I $(INCLUDE_DIR)/SDL2 -L $(LIB_DIR) -o main4 $(SRCS) -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf
+	gcc -I $(INCLUDE_DIR) -I $(INCLUDE_DIR)/SDL2 -L $(LIB_DIR) -o main $(SRCS) -lSDL2_image -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lws2_32
 
 # Comando para limpiar archivos generados
 clean:
