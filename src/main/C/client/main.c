@@ -7,6 +7,7 @@
 #include <string.h>
 #include <winsock2.h>
 #include <pthread.h>
+#include <windows.h>
 
 #define SCREEN_WIDTH 900
 #define SCREEN_HEIGHT 900
@@ -18,6 +19,8 @@
 #define CAR_TURN_SPEED 5
 #define PUERTO 12345
 #define BUFFERSIZE 1024
+#define ARDUINO_PORT "COM4" // Puerto serie donde está conectado Arduino
+#define ARDUINO_BAUDRATE CBR_9600 // Velocidad de baudios de Arduino
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -33,6 +36,7 @@ typedef struct {
 
 typedef struct {
     SOCKET sock;
+    HANDLE hSerial; // Añade esta línea para el puerto serie
     char mensaje[BUFFERSIZE];
     int track[GRID_SIZE][GRID_SIZE];
     CarSpeed carSpeed; // Añadir la estructura de velocidad del carro
@@ -106,6 +110,26 @@ void *enviar_posicion(void *data) {
         }
 
         SDL_Delay(1000); // Enviar la posición cada 1 segundo
+    }
+
+    return NULL;
+}
+    
+void *leer_desde_arduino(void *data) {
+    MessageData *messageData = (MessageData *)data;
+    char buffer[BUFFERSIZE];
+    DWORD bytesRead;
+
+    while (1) {
+        // Leer datos desde Arduino
+        if (ReadFile(messageData->hSerial, buffer, sizeof(buffer), &bytesRead, NULL)) {
+            buffer[bytesRead] = '\0'; // Agregar el carácter nulo al final
+            if (bytesRead > 0) {
+                printf(buffer);
+                // Aquí puedes procesar los datos recibidos desde Arduino según sea necesario
+            }
+        }
+        Sleep(100); // Retardo de 100ms
     }
 
     return NULL;
@@ -204,7 +228,7 @@ int main(int argc, char* argv[]) {
     WSADATA wsa;
     SOCKET sock;
     struct sockaddr_in servidor_addr;
-    pthread_t thread_id, send_thread_id, pos_thread_id;
+    pthread_t thread_id, send_thread_id, pos_thread_id, arduino_thread_id;
     Car car = { .x = (CELL_SIZE*19), .y = (CELL_SIZE*13), .angle = -90 };
     MessageData messageData = { .carSpeed = { CAR_SPEED, CAR_TURN_SPEED }, .car = &car };
 
@@ -258,6 +282,39 @@ int main(int argc, char* argv[]) {
         printf("Error al crear el hilo para enviar la posición.\n");
         closesocket(sock);
         WSACleanup();
+        return 1;
+    }
+
+    // Abrir el puerto serie para comunicarse con Arduino
+    messageData.hSerial = CreateFile(ARDUINO_PORT, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (messageData.hSerial == INVALID_HANDLE_VALUE) {
+        printf("Error al abrir el puerto serie para Arduino.\n");
+        return 1;
+    }
+
+    DCB dcbSerialParams = {0};
+    dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
+    if (!GetCommState(messageData.hSerial, &dcbSerialParams)) {
+        printf("Error al obtener el estado del puerto serie de Arduino.\n");
+        CloseHandle(messageData.hSerial);
+        return 1;
+    }
+
+    dcbSerialParams.BaudRate = ARDUINO_BAUDRATE;
+    dcbSerialParams.ByteSize = 8;
+    dcbSerialParams.StopBits = ONESTOPBIT;
+    dcbSerialParams.Parity = NOPARITY;
+
+    if (!SetCommState(messageData.hSerial, &dcbSerialParams)) {
+        printf("Error al configurar el estado del puerto serie de Arduino.\n");
+        CloseHandle(messageData.hSerial);
+        return 1;
+    }
+
+    // Crear el hilo para leer desde Arduino
+    if (pthread_create(&arduino_thread_id, NULL, leer_desde_arduino, (void *)&messageData) < 0) {
+        printf("Error al crear el hilo para leer desde Arduino.\n");
+        CloseHandle(messageData.hSerial);
         return 1;
     }
 
@@ -366,6 +423,8 @@ int main(int argc, char* argv[]) {
     // Cerrar el socket y limpiar Winsock
     closesocket(sock);
     WSACleanup();
+    // Cerrar el puerto serie de Arduino
+    CloseHandle(messageData.hSerial);
 
     return 0;
 }
