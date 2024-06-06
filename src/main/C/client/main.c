@@ -184,17 +184,33 @@ void *leer_desde_arduino(void *data) {
     while (1) {
         // Leer datos desde Arduino
         if (ReadFile(messageData->hSerial, buffer, sizeof(buffer), &bytesRead, NULL)) {
-            buffer[bytesRead] = '\0'; // Agregar el carácter nulo al final
             if (bytesRead > 0) {
-                printf(buffer);
-                // Aquí puedes procesar los datos recibidos desde Arduino según sea necesario
+                char firstChar = buffer[0]; // Leer solo el primer carácter
+
+                if (firstChar == 'E') {
+                    shootBullet(messageData->car);
+                }
+                else if (firstChar == 'W') {
+                    if (messageData->carSpeed.speed < 5){
+                            messageData->carSpeed.speed +=  1.0;
+                        }
+                }
+                else if (firstChar == 'S') {
+                    if (messageData->carSpeed.speed > 2) {
+                        messageData->carSpeed.speed +=  -1.0;
+                    }
+                }
+                else if (firstChar == 'A') {
+                    messageData->car->angle -= messageData->carSpeed.turn_speed;
+                }
+                else if (firstChar == 'D') {
+                   messageData->car->angle += messageData->carSpeed.turn_speed;
+                }
             }
         }
-        Sleep(100); // Retardo de 100ms
     }
-
-    return NULL;
 }
+
 
 void load_track_from_file(const char *filename, int track[GRID_SIZE][GRID_SIZE]) {
     FILE *file = fopen(filename, "r");
