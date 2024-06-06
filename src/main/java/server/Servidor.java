@@ -4,6 +4,10 @@ import java.io.*;
 import java.net.*;
 
 public class Servidor {
+    /**
+     * The main function sets up a server socket on a specified port, accepts client connections, and
+     * creates separate threads to handle communication with clients and console input.
+     */
     public static void main(String[] args) {
         int puerto = 12345; // El puerto en el que el servidor escuchará
         try (ServerSocket servidor = new ServerSocket(puerto)) {
