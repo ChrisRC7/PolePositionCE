@@ -7,6 +7,7 @@
 #include <string.h>
 #include <winsock2.h>
 #include <pthread.h>
+#include <math.h>
 
 #define SCREEN_WIDTH 900
 #define SCREEN_HEIGHT 900
@@ -20,6 +21,19 @@
 #define BUFFERSIZE 1024
 
 #pragma comment(lib, "ws2_32.lib")
+
+#define BULLET_COLOR 255, 0, 0, 255 // Red color for bullets
+#define BULLET_SPEED 10.0           // Increased bullet speed
+#define MAX_BULLETS 1000            // Infinite bullets
+
+typedef struct {
+    float x, y;
+    float dx, dy;
+    bool active;
+} Bullet;
+
+Bullet bullets[MAX_BULLETS] = {0};
+
 
 typedef struct {
     float x, y;  // posición del carro en la pista
@@ -38,6 +52,46 @@ typedef struct {
     CarSpeed carSpeed; // Añadir la estructura de velocidad del carro
     Car *car; // Puntero al carro
 } MessageData;
+
+void shootBullet(Car *car) {
+    for (int i = 0; i < MAX_BULLETS; ++i) {
+        if (!bullets[i].active) {
+            bullets[i].x = car->x;
+            bullets[i].y = car->y;
+            float radianAngle = car->angle * M_PI / 180.0;
+            bullets[i].dx = cos(radianAngle) * BULLET_SPEED;
+            bullets[i].dy = sin(radianAngle) * BULLET_SPEED;
+            bullets[i].active = true;
+        }
+    }
+}
+
+void updateBullets() {
+    for (int i = 0; i < MAX_BULLETS; ++i) {
+        if (bullets[i].active) {
+            bullets[i].x += bullets[i].dx;
+            bullets[i].y += bullets[i].dy;
+
+            // Desactivar la bala si se sale de la pantalla
+            if (bullets[i].x < 0 || bullets[i].x > SCREEN_WIDTH || bullets[i].y < 0 || bullets[i].y > SCREEN_HEIGHT) {
+                bullets[i].active = false;
+            }
+        }
+    }
+}
+
+void drawBullets(SDL_Renderer *renderer) {
+    SDL_SetRenderDrawColor(renderer, BULLET_COLOR); // Set bullet color to red
+    for (int i = 0; i < MAX_BULLETS; ++i) {
+        if (bullets[i].active) {
+            SDL_Rect rect = { (int)bullets[i].x, (int)bullets[i].y, 5, 5 };
+            SDL_RenderFillRect(renderer, &rect);
+            
+        }
+    }
+}
+
+
 
 void *recibir_mensajes(void *data) {
     MessageData *messageData = (MessageData *)data;
@@ -97,7 +151,14 @@ void *enviar_posicion(void *data) {
     char mensaje[BUFFERSIZE];
 
     while (1) {
-        snprintf(mensaje, BUFFERSIZE, "pos,%f,%f,%f", messageData->car->x, messageData->car->y, messageData->car->angle);
+        snprintf(mensaje, BUFFERSIZE, "pos,%f,%f,%f", ceil(messageData->car->x / CELL_SIZE), ceil(messageData->car->y / CELL_SIZE), messageData->car->angle);
+        snprintf(mensaje, BUFFERSIZE, "pos,%f,%f,%f", ceil(messageData->car->x / CELL_SIZE)+1, ceil(messageData->car->y / CELL_SIZE)+1, messageData->car->angle);
+        snprintf(mensaje, BUFFERSIZE, "pos,%f,%f,%f", ceil(messageData->car->x / CELL_SIZE), ceil(messageData->car->y / CELL_SIZE)+1, messageData->car->angle);
+        snprintf(mensaje, BUFFERSIZE, "pos,%f,%f,%f", ceil(messageData->car->x / CELL_SIZE)+1, ceil(messageData->car->y / CELL_SIZE), messageData->car->angle);
+        snprintf(mensaje, BUFFERSIZE, "pos,%f,%f,%f", ceil(messageData->car->x / CELL_SIZE)-1, ceil(messageData->car->y / CELL_SIZE)-1, messageData->car->angle);
+        snprintf(mensaje, BUFFERSIZE, "pos,%f,%f,%f", ceil(messageData->car->x / CELL_SIZE)-1, ceil(messageData->car->y / CELL_SIZE), messageData->car->angle);
+        snprintf(mensaje, BUFFERSIZE, "pos,%f,%f,%f", ceil(messageData->car->x / CELL_SIZE), ceil(messageData->car->y / CELL_SIZE)-1, messageData->car->angle);
+       
 
         // Enviar mensaje al servidor
         if (send(messageData->sock, mensaje, strlen(mensaje), 0) == SOCKET_ERROR) {
@@ -105,11 +166,11 @@ void *enviar_posicion(void *data) {
             break;
         }
 
-        SDL_Delay(1000); // Enviar la posición cada 1 segundo
+        SDL_Delay(1000);  // Añadir un pequeño retraso para evitar saturar el servidor
     }
 
     return NULL;
-}
+}   
 
 void load_track_from_file(const char *filename, int track[GRID_SIZE][GRID_SIZE]) {
     FILE *file = fopen(filename, "r");
@@ -186,10 +247,10 @@ void drawCar(SDL_Renderer *renderer, SDL_Texture *carTexture, Car *car) {
     SDL_RenderCopyEx(renderer, carTexture, NULL, &dstRect, car->angle, NULL, SDL_FLIP_NONE);
 }
 
-void updateCarPosition(Car *car, int track[GRID_SIZE][GRID_SIZE], float car_speed) {
+void updateCarPosition(Car *car, int track[GRID_SIZE][GRID_SIZE], float *car_speed) {
     float radianAngle = car->angle * M_PI / 180.0;
-    float newX = car->x + cos(radianAngle) * car_speed;
-    float newY = car->y + sin(radianAngle) * car_speed;
+    float newX = car->x + cos(radianAngle) * (*car_speed);
+    float newY = car->y + sin(radianAngle) * (*car_speed);
 
     int cellX = (int)(newX / CELL_SIZE);
     int cellY = (int)(newY / CELL_SIZE);
@@ -197,7 +258,16 @@ void updateCarPosition(Car *car, int track[GRID_SIZE][GRID_SIZE], float car_spee
     if (cellX >= 0 && cellX < GRID_SIZE && cellY >= 0 && cellY < GRID_SIZE && track[cellY][cellX] == 1) {
         car->x = newX;
         car->y = newY;
+    } else if (cellX >= 0 && cellX < GRID_SIZE && cellY >= 0 && cellY < GRID_SIZE && track[cellY][cellX] == 2) {
+        *car_speed = 1;
+        track[cellY][cellX] = 1;
+    } else if (cellX >= 0 && cellX < GRID_SIZE && cellY >= 0 && cellY < GRID_SIZE && track[cellY][cellX] == 3) {
+        *car_speed = 7;
+        track[cellY][cellX] = 1;
+    } else if (cellX >= 0 && cellX < GRID_SIZE && cellY >= 0 && cellY < GRID_SIZE && track[cellY][cellX] == 4) {
+        track[cellY][cellX] = 1;
     }
+  
 }
 
 int main(int argc, char* argv[]) {
@@ -244,7 +314,7 @@ int main(int argc, char* argv[]) {
         WSACleanup();
         return 1;
     }
-
+    
     // Crear el hilo para enviar mensajes al servidor
     if (pthread_create(&send_thread_id, NULL, enviar_mensajes, (void *)&messageData) < 0) {
         printf("Error al crear el hilo para enviar mensajes.\n");
@@ -252,7 +322,6 @@ int main(int argc, char* argv[]) {
         WSACleanup();
         return 1;
     }
-
     // Crear el hilo para enviar la posición del carro al servidor
     if (pthread_create(&pos_thread_id, NULL, enviar_posicion, (void *)&messageData) < 0) {
         printf("Error al crear el hilo para enviar la posición.\n");
@@ -324,11 +393,14 @@ int main(int argc, char* argv[]) {
                             messageData.carSpeed.speed +=  -1.0;
                         }
                         break;
+                    case SDLK_SPACE:
+                        shootBullet(&car);
+                        break;
                 }
             }
         }
 
-        updateCarPosition(&car, messageData.track, messageData.carSpeed.speed);
+        updateCarPosition(&car, messageData.track, (float *)&messageData.carSpeed.speed);
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
@@ -336,6 +408,8 @@ int main(int argc, char* argv[]) {
         SDL_Color green = {0, 255, 0, 255};
         SDL_Color gray = {128, 128, 128, 255};
         SDL_Color yellow = {246, 226, 29, 255};
+        SDL_Color blue = {0, 0, 255, 255};
+        SDL_Color red = {255, 0, 0, 255};
 
         for (int y = 0; y < GRID_SIZE; y++) {
             for (int x = 0; x < GRID_SIZE; x++) {
@@ -347,13 +421,22 @@ int main(int argc, char* argv[]) {
                 } else if (messageData.track[y][x] == 2) {
                     drawCell(renderer, x, y, yellow);
                     drawBorders(renderer, x, y, messageData.track);
+                } else if (messageData.track[y][x] == 3) {
+                    drawCell(renderer, x, y, blue);
+                    drawBorders(renderer, x, y, messageData.track);
+                } else if (messageData.track[y][x] == 4) {
+                    drawCell(renderer, x, y, red);
+                    drawBorders(renderer, x, y, messageData.track);
                 }
             }
         }
 
         drawCar(renderer, carTexture, &car);
+        drawBullets(renderer);  // Dibujar las balas
+
 
         SDL_RenderPresent(renderer);
+        updateBullets();
 
         SDL_Delay(16); // delay to cap the frame rate at ~60fps
     }
